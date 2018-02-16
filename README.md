@@ -1,3 +1,5 @@
+**Update:** we now have a package [apollo-link-swagger](https://www.npmjs.com/package/apollo-link-swagger)!
+
 This demo is an attempt to build a GraphQL wrapper for RESTful API **working only on the client side**.
 
 Quick start
