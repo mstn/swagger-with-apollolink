@@ -3,14 +3,30 @@ import './App.css';
 
 import { ApolloClient } from 'apollo-client';
 import { InMemoryCache } from 'apollo-cache-inmemory';
-import { SchemaLink } from "apollo-link-schema";
 
 import { ApolloProvider } from 'react-apollo';
 
 import { graphql } from 'react-apollo';
 import gql from 'graphql-tag';
 
-const toGraphQLSchema = require('swagger-to-graphql');
+import { SwaggerLink, loadSwaggerSchema } from 'apollo-link-swagger';
+
+async function createApolloClient() {
+  const schema = await loadSwaggerSchema('http://petstore.swagger.io/v2/swagger.json');
+  // swagger-to-graphql does not support primitive type file
+  // we patch the schema by hand
+  // https://github.com/yarax/swagger-to-graphql/issues/19
+  delete schema.paths['/pet/{petId}/uploadImage'];
+  console.log(schema);
+  const link = new SwaggerLink({ schema });
+
+  const client = new ApolloClient({
+    link,
+    cache: new InMemoryCache(),
+    connectToDevTools: true,
+  });
+  return client;
+}
 
 function PetStore(props) {
   const {
@@ -53,42 +69,23 @@ const PetStoreWithData = graphql(gql`
 
 class App extends Component {
   state = {
-    schema: undefined
-  }
+    client: null
+  };
   componentDidMount = () => {
-    fetch('http://petstore.swagger.io/v2/swagger.json')
-      .then( (response) => response.json())
-      .then( (swaggerSchema) => {
-        // swagger-to-graphql does not support primitive type file
-        // we patch the schema by hand
-        // https://github.com/yarax/swagger-to-graphql/issues/19
-        delete swaggerSchema.paths['/pet/{petId}/uploadImage'];
-        return toGraphQLSchema(swaggerSchema)
-      })
-      .then( (schema) => this.setState({schema}) );
+    createApolloClient()
+      .then( client => this.setState({client}) );
   }
   render() {
     return (
       <div>
-        { !this.state.schema && <p>Loading...</p> }
-        { this.state.schema && this.renderWithApolloProvider() }
+        { !this.state.client && <p>Loading schema...</p> }
+        { this.state.client && this.renderWithApolloProvider() }
       </div>
     );
   }
-  renderWithApolloProvider = () => {
-    const { schema } = this.state;
-    const client = new ApolloClient({
-      link: new SchemaLink({
-        schema,
-        context: {
-          GQLProxyBaseUrl: 'http://petstore.swagger.io/v2'
-        }
-      }),
-      cache: new InMemoryCache(),
-      connectToDevTools: true,
-    });
+  renderWithApolloProvider() {
     return (
-      <ApolloProvider client={client}>
+      <ApolloProvider client={this.state.client}>
         <PetStoreWithData />
       </ApolloProvider>
     );
